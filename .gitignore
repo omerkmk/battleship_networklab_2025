@@ -1,0 +1,15 @@
+# Java derleme sonuçları
+*.class
+/bin/
+/target/
+
+# IDE ayarları
+/.idea/
+.project
+.classpath
+/.settings/
+
+# Log ve geçici dosyalar
+*.log
+*.tmp
+
