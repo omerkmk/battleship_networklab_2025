@@ -1,73 +1,109 @@
+// src/model/Board.java
 package model;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Oyuncunun oyun tahtasını temsil eder.
+ * Bir oyuncunun tahtasını ve üzerindeki gemileri/atışları yönetir.
  */
-public class Board {
-    public enum Cell { EMPTY, SHIP, HIT, MISS }
+public class Board implements Serializable {
+    private static final long serialVersionUID = 1L;
 
-    private static final int SIZE = 10;
-    private final Cell[][] grid = new Cell[SIZE][SIZE];
-    private final List<Ship> ships = new ArrayList<>();
+    /** Her hücrenin durumu */
+    public enum Cell {
+        EMPTY,   // Boş
+        SHIP,    // Gemi var
+        HIT,     // Vuruldu
+        MISS     // Iskaladı
+    }
+
+    private final Cell[][] grid;
+    private final List<Ship> ships;
 
     public Board() {
-        for (int i = 0; i < SIZE; i++) {
-            for (int j = 0; j < SIZE; j++) {
-                grid[i][j] = Cell.EMPTY;
+        grid  = new Cell[GameRules.GRID_SIZE][GameRules.GRID_SIZE];
+        ships = new ArrayList<>();
+        // Başlangıçta tüm hücreler boştur
+        for (int r = 0; r < GameRules.GRID_SIZE; r++) {
+            for (int c = 0; c < GameRules.GRID_SIZE; c++) {
+                grid[r][c] = Cell.EMPTY;
             }
         }
     }
 
+    /**
+     * Gemi yerleştirmeye çalışır. Eğer gemi tahtayı aşmıyor ve mevcut
+     * gemilerle çakışmıyorsa, grid üzerinde SHIP olarak işaretler.
+     * @param ship Yerleştirilecek gemi
+     * @return Başarılıysa true, aksi halde false
+     */
     public boolean placeShip(Ship ship) {
-        for (Position pos : ship.getPositions()) {
-            int row = pos.getRow();
-            int col = pos.getCol();
-
-            if (!isValidPosition(row, col) || grid[row][col] != Cell.EMPTY) {
-                return false; // Taşma ya da çakışma
+        // Önce pozisyonları kontrol et
+        for (Position p : ship.getPositions()) {
+            int r = p.getRow(), c = p.getCol();
+            if (r < 0 || r >= GameRules.GRID_SIZE
+             || c < 0 || c >= GameRules.GRID_SIZE
+             || grid[r][c] != Cell.EMPTY) {
+                return false;
             }
         }
-
-        for (Position pos : ship.getPositions()) {
-            grid[pos.getRow()][pos.getCol()] = Cell.SHIP;
+        // Hepsi uygunsa yerleştir
+        for (Position p : ship.getPositions()) {
+            grid[p.getRow()][p.getCol()] = Cell.SHIP;
         }
         ships.add(ship);
         return true;
     }
 
-    public Cell fire(Position pos) {
-        int row = pos.getRow();
-        int col = pos.getCol();
-
-        if (!isValidPosition(row, col)) {
-            throw new IllegalArgumentException("Invalid position: " + pos);
+    /**
+     * Bir pozisyona ateş eder. Eğer orada SHIP varsa HIT, değilse MISS
+     * olarak işaretler ve sonucu döner.
+     * @param p Atış pozisyonu
+     * @return Board.Cell.HIT veya MISS veya mevcut durum (tekrar atışsa)
+     */
+    public Cell fire(Position p) {
+        int r = p.getRow(), c = p.getCol();
+        if (r < 0 || r >= GameRules.GRID_SIZE
+         || c < 0 || c >= GameRules.GRID_SIZE) {
+            return Cell.MISS;
         }
+        Cell current = grid[r][c];
+        if (current == Cell.HIT || current == Cell.MISS) {
+            return current; // zaten işaretlenmiş
+        }
+        if (current == Cell.SHIP) {
+            grid[r][c] = Cell.HIT;
+            return Cell.HIT;
+        } else {
+            grid[r][c] = Cell.MISS;
+            return Cell.MISS;
+        }
+    }
 
-        if (grid[row][col] == Cell.SHIP) {
-            grid[row][col] = Cell.HIT;
-            for (Ship ship : ships) {
-                if (ship.occupies(pos)) {
-                    ship.hit(pos);
-                    break;
+    /** Verilen pozisyondaki hücrenin güncel durumunu döner */
+    public Cell getCell(Position p) {
+        return grid[p.getRow()][p.getCol()];
+    }
+
+    /**
+     * Tüm gemiler battı mı kontrol eder.
+     * @return Eğer tüm gemi hücreleri HIT ise true
+     */
+    public boolean allSunk() {
+        for (Ship s : ships) {
+            for (Position p : s.getPositions()) {
+                if (grid[p.getRow()][p.getCol()] != Cell.HIT) {
+                    return false;
                 }
             }
-            return Cell.HIT;
-        } else if (grid[row][col] == Cell.EMPTY) {
-            grid[row][col] = Cell.MISS;
-            return Cell.MISS;
-        } else {
-            return grid[row][col]; // Önceden vurulmuş yer
         }
+        return true;
     }
 
-    public boolean allSunk() {
-        return ships.stream().allMatch(Ship::isSunk);
-    }
-
-    private boolean isValidPosition(int row, int col) {
-        return row >= 0 && row < SIZE && col >= 0 && col < SIZE;
+    /** Yerleştirilmiş gemi listesini döner (UI için revealShips) */
+    public List<Ship> getShips() {
+        return ships;
     }
 }

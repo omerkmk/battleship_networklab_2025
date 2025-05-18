@@ -1,13 +1,22 @@
+// src/model/Position.java
 package model;
 
+import java.io.Serializable;
 import java.util.Objects;
 
+/**
+ * Satır ve sütun ile bir hücrenin konumunu tutar.
+ */
+public class Position implements Serializable {
+    private static final long serialVersionUID = 1L;
 
-public class Position {
-    private int row;
-    private int col;
+    private final int row;
+    private final int col;
 
     public Position(int row, int col) {
+        if (row < 0 || col < 0) {
+            throw new IllegalArgumentException("Row and col must be non-negative.");
+        }
         this.row = row;
         this.col = col;
     }
@@ -35,6 +44,6 @@ public class Position {
 
     @Override
     public String toString() {
-        return "(" + row + ", " + col + ")";
+        return String.format("(%d,%d)", row, col);
     }
 }

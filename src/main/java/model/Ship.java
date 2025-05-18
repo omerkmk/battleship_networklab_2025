@@ -1,43 +1,71 @@
+// src/model/Ship.java
 package model;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Ship {
-    private final List<Position> positions; // Gemiye ait tüm hücreler
-    private final List<Position> hits;      // İsabet alan hücreler
+/**
+ * Bir geminin başlangıç ve bitiş pozisyonlarıyla tanımlandığı sınıf.
+ */
+public class Ship implements Serializable {
+    private static final long serialVersionUID = 1L;
 
-    public Ship(Position start, int length, boolean isHorizontal) {
-        positions = new ArrayList<>();
-        hits = new ArrayList<>();
+    private final Position start;
+    private final Position end;
 
-        for (int i = 0; i < length; i++) {
-            int row = start.getRow() + (isHorizontal ? 0 : i);
-            int col = start.getCol() + (isHorizontal ? i : 0);
-            positions.add(new Position(row, col));
+    public Ship(Position start, Position end) {
+        // Yatay veya dikey olması gerektiğini garanti edelim
+        if (start.getRow() != end.getRow() && start.getCol() != end.getCol()) {
+            throw new IllegalArgumentException("Ship must be horizontal or vertical.");
         }
+        this.start = start;
+        this.end   = end;
     }
 
+    /** Başlangıç pozisyonu */
+    public Position getStart() {
+        return start;
+    }
+
+    /** Bitiş pozisyonu */
+    public Position getEnd() {
+        return end;
+    }
+
+    /** Gemi üzerindeki tüm hücre pozisyonlarını sıralı olarak döner */
     public List<Position> getPositions() {
-        return positions;
-    }
+        List<Position> posList = new ArrayList<>();
+        int dr = Integer.signum(end.getRow() - start.getRow());
+        int dc = Integer.signum(end.getCol() - start.getCol());
+        int length = Math.max(
+            Math.abs(end.getRow() - start.getRow()),
+            Math.abs(end.getCol() - start.getCol())
+        ) + 1;
 
-    public boolean occupies(Position pos) {
-        return positions.contains(pos);
-    }
-
-    public void hit(Position pos) {
-        if (occupies(pos) && !hits.contains(pos)) {
-            hits.add(pos);
+        int r = start.getRow(), c = start.getCol();
+        for (int i = 0; i < length; i++) {
+            posList.add(new Position(r, c));
+            r += dr;
+            c += dc;
         }
+        return posList;
     }
 
-    public boolean isSunk() {
-        return hits.containsAll(positions);
+    /** Gemi uzunluğunu döner (hücre sayısı) */
+    public int length() {
+        return getPositions().size();
     }
 
-    @Override
-    public String toString() {
-        return "Ship{" + "positions=" + positions + ", hits=" + hits + '}';
+    /** Yatay konumdan gemi oluşturur */
+    public static Ship fromHorizontal(Position start, int length) {
+        Position end = new Position(start.getRow(), start.getCol() + length - 1);
+        return new Ship(start, end);
+    }
+
+    /** Dikey konumdan gemi oluşturur */
+    public static Ship fromVertical(Position start, int length) {
+        Position end = new Position(start.getRow() + length - 1, start.getCol());
+        return new Ship(start, end);
     }
 }
