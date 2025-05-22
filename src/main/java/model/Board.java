@@ -9,13 +9,17 @@ import java.util.List;
  * Bir oyuncunun tahtasını ve üzerindeki gemileri/atışları yönetir.
  */
 public class Board implements Serializable {
+    // src/model/Board.java
+
     private static final long serialVersionUID = 1L;
 
-    /** Her hücrenin durumu */
+    /**
+     * Her hücrenin durumu
+     */
     public enum Cell {
-        EMPTY,   // Boş
-        SHIP,    // Gemi var
-        HIT,     // Vuruldu
+        EMPTY, // Boş
+        SHIP, // Gemi var
+        HIT, // Vuruldu
         MISS     // Iskaladı
     }
 
@@ -23,7 +27,7 @@ public class Board implements Serializable {
     private final List<Ship> ships;
 
     public Board() {
-        grid  = new Cell[GameRules.GRID_SIZE][GameRules.GRID_SIZE];
+        grid = new Cell[GameRules.GRID_SIZE][GameRules.GRID_SIZE];
         ships = new ArrayList<>();
         // Başlangıçta tüm hücreler boştur
         for (int r = 0; r < GameRules.GRID_SIZE; r++) {
@@ -34,8 +38,9 @@ public class Board implements Serializable {
     }
 
     /**
-     * Gemi yerleştirmeye çalışır. Eğer gemi tahtayı aşmıyor ve mevcut
-     * gemilerle çakışmıyorsa, grid üzerinde SHIP olarak işaretler.
+     * Gemi yerleştirmeye çalışır. Eğer gemi tahtayı aşmıyor ve mevcut gemilerle
+     * çakışmıyorsa, grid üzerinde SHIP olarak işaretler.
+     *
      * @param ship Yerleştirilecek gemi
      * @return Başarılıysa true, aksi halde false
      */
@@ -44,8 +49,8 @@ public class Board implements Serializable {
         for (Position p : ship.getPositions()) {
             int r = p.getRow(), c = p.getCol();
             if (r < 0 || r >= GameRules.GRID_SIZE
-             || c < 0 || c >= GameRules.GRID_SIZE
-             || grid[r][c] != Cell.EMPTY) {
+                    || c < 0 || c >= GameRules.GRID_SIZE
+                    || grid[r][c] != Cell.EMPTY) {
                 return false;
             }
         }
@@ -58,15 +63,16 @@ public class Board implements Serializable {
     }
 
     /**
-     * Bir pozisyona ateş eder. Eğer orada SHIP varsa HIT, değilse MISS
-     * olarak işaretler ve sonucu döner.
+     * Bir pozisyona ateş eder. Eğer orada SHIP varsa HIT, değilse MISS olarak
+     * işaretler ve sonucu döner.
+     *
      * @param p Atış pozisyonu
      * @return Board.Cell.HIT veya MISS veya mevcut durum (tekrar atışsa)
      */
     public Cell fire(Position p) {
         int r = p.getRow(), c = p.getCol();
         if (r < 0 || r >= GameRules.GRID_SIZE
-         || c < 0 || c >= GameRules.GRID_SIZE) {
+                || c < 0 || c >= GameRules.GRID_SIZE) {
             return Cell.MISS;
         }
         Cell current = grid[r][c];
@@ -82,13 +88,22 @@ public class Board implements Serializable {
         }
     }
 
-    /** Verilen pozisyondaki hücrenin güncel durumunu döner */
+    /**
+     * Verilen pozisyondaki hücrenin güncel durumunu döner
+     */
     public Cell getCell(Position p) {
         return grid[p.getRow()][p.getCol()];
     }
 
+    // src/model/Board.java
+    // Hücre durumunu dışarıdan set etmek için
+    public void setCell(Position p, Cell v) {
+        grid[p.getRow()][p.getCol()] = v;
+    }
+
     /**
      * Tüm gemiler battı mı kontrol eder.
+     *
      * @return Eğer tüm gemi hücreleri HIT ise true
      */
     public boolean allSunk() {
@@ -102,7 +117,9 @@ public class Board implements Serializable {
         return true;
     }
 
-    /** Yerleştirilmiş gemi listesini döner (UI için revealShips) */
+    /**
+     * Yerleştirilmiş gemi listesini döner (UI için revealShips)
+     */
     public List<Ship> getShips() {
         return ships;
     }

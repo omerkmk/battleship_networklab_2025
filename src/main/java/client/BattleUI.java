@@ -12,15 +12,22 @@ import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
+import model.Ship;
 
 /**
- * Sadece savaş fazını yöneten UI.
+ * Sadece savaş fazını yöneten estetik, koyu temalı UI (güncellendi gemi vurgusu ve rematch özelliği).
  */
 public class BattleUI extends JFrame {
 
     private static final int G = GameRules.GRID_SIZE;
-    private static final Color WATER = new Color(173, 216, 230);
-    private static final Border CELL_BORDER = BorderFactory.createLineBorder(Color.BLUE, 1);
+    // Güncellenmiş renk paleti
+    private static final Color WATER       = Color.decode("#0D1B2A");
+    private static final Color EMPTY_CELL  = Color.decode("#BDC3C7");
+    private static final Color SHIP_COLOR  = Color.decode("#C0392B");
+    private static final Color BORDER_COL  = Color.decode("#2C3E50");
+    private static final Color HIT_COLOR   = Color.decode("#D72631");
+    private static final Color MISS_COLOR  = Color.decode("#57C7F4");
+    private static final Color SUNK_COLOR  = Color.decode("#6C2DC7");
 
     private final GameClient client;
     private final int myPlayer;
@@ -29,6 +36,7 @@ public class BattleUI extends JFrame {
     private final BoardPanel myPanel;
     private final BoardPanel oppPanel;
     private final JLabel infoLabel = new JLabel();
+    private final JButton rematchButton = new JButton("↻ Rematch");
 
     public BattleUI(GameClient client, int myPlayer, GameState state, boolean yourTurn) {
         super("Battle – Player " + (myPlayer + 1));
@@ -36,202 +44,185 @@ public class BattleUI extends JFrame {
         this.myPlayer = myPlayer;
         this.state = state;
 
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setLayout(new BorderLayout(5, 5));
+        try {
+            for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
+                if ("Nimbus".equals(info.getName())) {
+                    UIManager.setLookAndFeel(info.getClassName());
+                    break;
+                }
+            }
+        } catch (Exception ignored) {}
 
-        // Üstte bilgi etiketi
-        infoLabel.setFont(new Font("SansSerif", Font.BOLD, 14));
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        getContentPane().setBackground(WATER);
+        setLayout(new BorderLayout(10, 10));
+
+        infoLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        infoLabel.setForeground(Color.WHITE);
+        infoLabel.setHorizontalAlignment(SwingConstants.CENTER);
         add(infoLabel, BorderLayout.NORTH);
 
-        // Ortada iki tahta
-        myPanel = new BoardPanel(myPlayer);
+        myPanel  = new BoardPanel(myPlayer);
         oppPanel = new BoardPanel(1 - myPlayer);
-        JPanel center = new JPanel(new GridLayout(1, 2, 10, 10));
+        JPanel center = new JPanel(new GridLayout(1, 2, 20, 20));
+        center.setOpaque(false);
         center.add(myPanel);
         center.add(oppPanel);
         add(center, BorderLayout.CENTER);
 
-        pack();
-        setLocationRelativeTo(null);
-        setVisible(true);
+        // Rematch button init
+        rematchButton.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        rematchButton.setVisible(false);
+        rematchButton.setEnabled(false);
+        rematchButton.addActionListener(e -> {
+            client.sendRematchRequest();
+            rematchButton.setEnabled(false);
+            rematchButton.setText("Bekleniyor...");
+        });
 
-        // İlk turu ayarla ve görünümü yenile
+        JPanel bottomPanel = new JPanel(new BorderLayout());
+        bottomPanel.setOpaque(false);
+        bottomPanel.add(rematchButton, BorderLayout.EAST);
+        add(bottomPanel, BorderLayout.SOUTH);
+
+        pack(); setResizable(false); setLocationRelativeTo(null); setVisible(true);
+
         state.setCurrentPlayer(yourTurn ? myPlayer : 1 - myPlayer);
         refreshView();
     }
 
     private void refreshView() {
-        // Kendi tahtam: gemileri göster, tıklamayı kapat
-        myPanel.clear();
         myPanel.revealShips(state.getBoard(myPlayer).getShips());
         myPanel.setButtonsEnabled(false);
 
-        // Rakip tahtası: önce tüm atışları işaretle
-        oppPanel.clear();
-        for (int r = 0; r < G; r++) {
-            for (int c = 0; c < G; c++) {
-                Position p = new Position(r, c);
-                Cell cell = state.getBoard(1 - myPlayer).getCell(p);
-                if (cell == Cell.HIT || cell == Cell.MISS) {
-                    oppPanel.markShot(p, cell);
-                }
-            }
+        for (int r = 0; r < G; r++) for (int c = 0; c < G; c++) {
+            Position p = new Position(r, c);
+            Cell cell = state.getBoard(1 - myPlayer).getCell(p);
+            if (cell != Cell.EMPTY) oppPanel.markShot(p, cell);
         }
 
-        // Sıra sende mi?
         boolean yourTurn = state.getCurrentPlayer() == myPlayer;
         oppPanel.setButtonsEnabled(yourTurn);
-        infoLabel.setText(yourTurn ? "Your turn" : "Opponent's turn");
+        infoLabel.setText(yourTurn ? "YOUR TURN" : "OPPONENT'S TURN");
     }
 
-    // -----------------------------------
-    // GameClient’dan gelecek callback’ler
-    // -----------------------------------
     public void handleFireResponse(FireResponse resp) {
         SwingUtilities.invokeLater(() -> {
             Position p = resp.getPosition();
-            Cell r = resp.getResult();
+            Cell result = resp.getResult();
+            boolean iAttacked = state.getCurrentPlayer() == myPlayer;
+            int defender = iAttacked ? 1 - myPlayer : myPlayer;
 
-            boolean iAttacked = (state.getCurrentPlayer() == myPlayer);
+            state.getBoard(defender).setCell(p, result);
+            if (iAttacked) oppPanel.markShot(p, result);
+            else myPanel.markShot(p, result);
 
-            // ① İşaretlemeyi koy
-            if (iAttacked) {
-                // saldıran kendi opponent paneline
-                oppPanel.markShot(p, r);
-            } else {
-                // savunan kendi your-board’una
-                myPanel.markShot(p, r);
+            if (result == Cell.HIT) {
+                for (Ship ship : state.getBoard(defender).getShips()) {
+                    boolean sunk = ship.getPositions().stream()
+                            .allMatch(pos -> state.getBoard(defender).getCell(pos) == Cell.HIT);
+                    if (sunk) ship.getPositions().forEach(oppPanel::markSunk);
+                }
             }
-
-            // ② Hit/Miss mesajı
-            if (iAttacked) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        r == Cell.HIT ? "You hit a ship!" : "You missed!",
-                        r == Cell.HIT ? "Hit!" : "Miss!",
-                        JOptionPane.INFORMATION_MESSAGE
-                );
-            } else {
-                JOptionPane.showMessageDialog(
-                        this,
-                        r == Cell.HIT ? "Your ship was hit!" : "Opponent missed!",
-                        r == Cell.HIT ? "Hit received" : "Missed by opponent",
-                        JOptionPane.INFORMATION_MESSAGE
-                );
-            }
-
-            // **NOT:** Şimdi **state.fire(p)** çağırma ve **refreshView()** yapma!
-            // Sadece server’dan gelecek TurnMessage’a kadar bekle
         });
     }
 
     public void handleTurnMessage(TurnMessage tm) {
         SwingUtilities.invokeLater(() -> {
-            // ① Server’dan gelen “senin sıran mı” bilgisini state’e aktar
             boolean yourTurn = tm.isYourTurn();
             state.setCurrentPlayer(yourTurn ? myPlayer : 1 - myPlayer);
-
-            // ② State’teki tüm atışları (önceden markShot’la işaretlenmiş hücreler de dahil)
-            //     ve yeni turn durumunu ekrana yansıt
-            refreshView();
+            oppPanel.setButtonsEnabled(yourTurn);
+            infoLabel.setText(yourTurn ? "YOUR TURN" : "OPPONENT'S TURN");
         });
     }
 
     public void handleGameOverMessage(GameOverMessage gom) {
         SwingUtilities.invokeLater(() -> {
-            String msg = (gom.getWinner() == myPlayer) ? "You win!" : "You lose!";
-            JOptionPane.showMessageDialog(this, msg);
-            System.exit(0);
+            String msg = gom.getWinner() == myPlayer ? "YOU WIN!" : "YOU LOSE!";
+            infoLabel.setText("GAME OVER – " + msg);
+
+            // Rematch butonunu aktif et
+            rematchButton.setVisible(true);
+            rematchButton.setEnabled(true);
         });
     }
 
-    // -----------------------------------
-    // İç sınıf: tek bir tahta (myPanel veya oppPanel)
-    // -----------------------------------
     private class BoardPanel extends JPanel {
+        private final JButton[][] buttons = new JButton[G][G];
+        private final int player;
 
-        private final JButton[][] btns = new JButton[G][G];
-        private final int panelPlayer;
-
-        BoardPanel(int panelPlayer) {
-            this.panelPlayer = panelPlayer;
+        BoardPanel(int player) {
+            this.player = player;
+            setOpaque(false);
             setBorder(BorderFactory.createTitledBorder(
-                    CELL_BORDER, "Player " + (panelPlayer + 1),
-                    TitledBorder.CENTER, TitledBorder.TOP));
-            setLayout(new GridLayout(G, G));
+                BorderFactory.createLineBorder(BORDER_COL, 2),
+                player == myPlayer ? "Your Board" : "Opponent Board",
+                TitledBorder.CENTER, TitledBorder.TOP,
+                new Font("Segoe UI", Font.BOLD, 16), Color.WHITE));
+            setLayout(new GridLayout(G, G, 2, 2));
+            initButtons();
+        }
 
-            for (int r = 0; r < G; r++) {
-                for (int c = 0; c < G; c++) {
-                    JButton b = new JButton();
-                    b.setPreferredSize(new Dimension(35, 35));
-                    b.setBackground(WATER);
-                    b.setOpaque(true);
-                    b.setBorder(CELL_BORDER);
-
-                    Position p = new Position(r, c);
-                    b.putClientProperty("pos", p);
-                    b.addActionListener(e -> {
-                        // Sadece rakip tahtasını ve eğer sıra bende ise tıkla
-                        if (panelPlayer == (1 - myPlayer)
-                                && state.getCurrentPlayer() == myPlayer) {
-                            client.sendFire(p);
-                        }
-                    });
-
-                    btns[r][c] = b;
-                    add(b);
-                }
+        private void initButtons() {
+            for (int r = 0; r < G; r++) for (int c = 0; c < G; c++) {
+                JButton b = new JButton();
+                b.setPreferredSize(new Dimension(38, 38));
+                b.setBackground(EMPTY_CELL);
+                b.setOpaque(true);
+                b.setBorder(BorderFactory.createLineBorder(BORDER_COL, 2));
+                Position pos = new Position(r, c);
+                b.putClientProperty("pos", pos);
+                b.addActionListener(e -> {
+                    if (player != myPlayer && state.getCurrentPlayer() == myPlayer) {
+                        client.sendFire(pos);
+                    }
+                });
+                buttons[r][c] = b;
+                add(b);
             }
         }
 
-        void clear() {
-            for (int r = 0; r < G; r++) {
-                for (int c = 0; c < G; c++) {
-                    JButton b = btns[r][c];
-                    b.setText("");
-                    b.setBackground(WATER);
-                    b.setBorder(CELL_BORDER);
-                    b.setEnabled(true);
-                }
-            }
-        }
-
-        void revealShips(java.util.List<model.Ship> ships) {
-            for (model.Ship s : ships) {
-                for (Position p : s.getPositions()) {
-                    JButton b = btns[p.getRow()][p.getCol()];
-                    b.setBackground(Color.DARK_GRAY);
-                    b.setEnabled(false);
-                }
-            }
-        }
-
-        /**
-         * Hücreye vurulduysa kalıcı kırmızı, ıskaladıysa O harfiyle işaretler.
-         */
-        void markShot(Position p, Cell res) {
-            JButton b = btns[p.getRow()][p.getCol()];
-            if (res == Cell.HIT) {
-                b.setBackground(Color.RED);               // vurulan gemiyi kırmızıya boyar
+        void markShot(Position p, Cell cell) {
+            JButton b = buttons[p.getRow()][p.getCol()];
+            if (cell == Cell.HIT) {
+                b.setBackground(HIT_COLOR);
                 b.setText("X");
-                b.setFont(new Font("SansSerif", Font.BOLD, 18));
-                b.setForeground(Color.WHITE);
-            } else {
-                b.setBackground(WATER);                   // ıskalama hâlinde su renginde bırak
+            } else if (cell == Cell.MISS) {
+                b.setBackground(MISS_COLOR);
                 b.setText("O");
-                b.setFont(new Font("SansSerif", Font.BOLD, 18));
-                b.setForeground(new Color(0, 0, 128));
             }
+            b.setForeground(Color.WHITE);
+            b.setFont(new Font("Segoe UI", Font.BOLD, 16));
+            b.setBorder(BorderFactory.createLineBorder(BORDER_COL, 2));
             b.setEnabled(false);
         }
 
+        void markSunk(Position p) {
+            JButton b = buttons[p.getRow()][p.getCol()];
+            b.setBackground(SUNK_COLOR);
+            b.setText("\u2693");
+            b.setForeground(Color.WHITE);
+            b.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 18));
+            b.setBorder(BorderFactory.createLineBorder(BORDER_COL, 3));
+            b.setEnabled(false);
+        }
+
+        void revealShips(java.util.List<Ship> ships) {
+            for (Ship ship : ships) for (Position p : ship.getPositions()) {
+                JButton b = buttons[p.getRow()][p.getCol()];
+                b.setBackground(SHIP_COLOR);
+                b.setText("\u2693");
+                b.setForeground(Color.WHITE);
+                b.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 18));
+                b.setBorder(BorderFactory.createLineBorder(SHIP_COLOR.darker(), 3));
+                b.setEnabled(false);
+            }
+        }
+
         void setButtonsEnabled(boolean enabled) {
-            for (int r = 0; r < G; r++) {
-                for (int c = 0; c < G; c++) {
-                    if (btns[r][c].isEnabled()) {
-                        btns[r][c].setEnabled(enabled);
-                    }
-                }
+            for (int r = 0; r < G; r++) for (int c = 0; c < G; c++) {
+                JButton b = buttons[r][c];
+                if (b.getText().isEmpty()) b.setEnabled(enabled);
             }
         }
     }

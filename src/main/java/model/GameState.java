@@ -7,6 +7,7 @@ import java.io.Serializable;
  * Oyun akışını ve her iki oyuncunun tahtalarını yöneten sınıf.
  */
 public class GameState implements Serializable {
+
     private static final long serialVersionUID = 1L;
 
     private Board[] boards;
@@ -16,16 +17,16 @@ public class GameState implements Serializable {
     private int winner;
 
     public GameState() {
-        boards = new Board[]{ new Board(), new Board() };
-        shipsPlaced = new int[]{ 0, 0 };
+        boards = new Board[]{new Board(), new Board()};
+        shipsPlaced = new int[]{0, 0};
         currentPlayer = 0;
         gameOver = false;
         winner = -1;
     }
 
     /**
-     * Belirli bir oyuncunun tahtasını ve sayaçını sıfırlar.
-     * Randomize öncesi UI’den çağrılır.
+     * Belirli bir oyuncunun tahtasını ve sayaçını sıfırlar. Randomize öncesi
+     * UI’den çağrılır.
      */
     public void clearBoard(int player) {
         boards[player] = new Board();
@@ -33,11 +34,12 @@ public class GameState implements Serializable {
     }
 
     /**
-     * player için gemi yerleştirmeyi dener.
-     * Başarılıysa sayaç artar.
+     * player için gemi yerleştirmeyi dener. Başarılıysa sayaç artar.
      */
     public boolean placeShip(int player, Ship ship) {
-        if (shipsPlaced[player] >= GameRules.numShips()) return false;
+        if (shipsPlaced[player] >= GameRules.numShips()) {
+            return false;
+        }
         if (boards[player].placeShip(ship)) {
             shipsPlaced[player]++;
             return true;
@@ -46,9 +48,8 @@ public class GameState implements Serializable {
     }
 
     /**
-     * currentPlayer dışındaki oyuncuya ateş eder.
-     * HIT ise sıra aynı kalır, MISS ise sıra diğerine geçer.
-     * Eğer tüm gemiler batmışsa oyunu sonlandırır.
+     * currentPlayer dışındaki oyuncuya ateş eder. HIT ise sıra aynı kalır, MISS
+     * ise sıra diğerine geçer. Eğer tüm gemiler batmışsa oyunu sonlandırır.
      */
     public Board.Cell fire(Position pos) {
         int opponent = 1 - currentPlayer;
@@ -78,7 +79,9 @@ public class GameState implements Serializable {
         return currentPlayer;
     }
 
-    /** UI’nin doğrudan sıra bilgisini set etmek için (handleTurnMessage ile) */
+    /**
+     * UI’nin doğrudan sıra bilgisini set etmek için (handleTurnMessage ile)
+     */
     public void setCurrentPlayer(int player) {
         this.currentPlayer = player;
     }
@@ -90,4 +93,16 @@ public class GameState implements Serializable {
     public Board getBoard(int player) {
         return boards[player];
     }
+
+    /**
+     * Tüm oyun durumunu baştan başlatır.
+     */
+    public void reset() {
+        boards = new Board[]{new Board(), new Board()};
+        shipsPlaced = new int[]{0, 0};
+        currentPlayer = 0;
+        gameOver = false;
+        winner = -1;
+    }
+
 }
