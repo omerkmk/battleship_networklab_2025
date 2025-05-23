@@ -9,17 +9,25 @@ import java.io.*;
 import java.net.Socket;
 
 /**
- * GameClient handles handshake, game loop, and rematch cycles.
+ * GameClient manages the client-side communication with the server.
+ * Responsibilities:
+ *  - Handles the initial handshake and match-making.
+ *  - Processes game flow: ship placement, turns, fire, and game over.
+ *  - Sends requests such as place ship, ready, fire, and rematch.
  */
 public class GameClient {
 
-    private final Socket socket;
-    private final ObjectOutputStream out;
-    private final ObjectInputStream in;
-    private int myPlayer;      // assigned after MatchFound
-    private final LobbyUI lobbyUi;
-    private Object ui;         // GameUI or BattleUI reference
+    private final Socket socket;               // TCP socket for communication
+    private final ObjectOutputStream out;      // Stream to send objects to the server
+    private final ObjectInputStream in;        // Stream to receive objects from the server
+    private int myPlayer;                      // This client's player ID
+    private final LobbyUI lobbyUi;             // UI shown in the lobby phase
+    private Object ui;                         // Active UI (GameUI or BattleUI)
 
+    /**
+     * Constructor for GameClient.
+     * Initializes network connection and input/output streams.
+     */
     public GameClient(String host, int port, LobbyUI lobbyUi) throws IOException {
         this.socket = new Socket(host, port);
         this.out    = new ObjectOutputStream(socket.getOutputStream());
@@ -28,15 +36,22 @@ public class GameClient {
         this.ui      = lobbyUi;
     }
 
+    /**
+     * Sets the current active UI (either GameUI or BattleUI).
+     */
     public void setUI(Object ui) {
         this.ui = ui;
     }
 
+    /**
+     * Main entry point for the client logic.
+     * Handles handshake, game loop, and rematch cycles.
+     */
     public void start() {
         try {
             boolean rematch;
             do {
-                // A) Handshake & MatchFound
+                // === A) Initial Handshake and Match Found Phase ===
                 Object msg;
                 while ((msg = in.readObject()) != null) {
                     if (msg instanceof String str && "WELCOME".equals(str)) {
@@ -44,20 +59,21 @@ public class GameClient {
                     } else if (msg instanceof MatchFoundMessage mfm) {
                         myPlayer = mfm.getPlayerId();
                         System.out.println("MatchFound: player=" + myPlayer);
+
+                        // Update UI on EDT
                         SwingUtilities.invokeLater(() -> {
-                            // Dispose previous UI before starting rematch
                             if (ui instanceof JFrame) {
-                                ((JFrame) ui).dispose();
+                                ((JFrame) ui).dispose();  // Close previous UI if any
                             }
                             lobbyUi.onMatchFound(myPlayer, this);
                         });
-                        break;
+                        break; // Proceed to game loop
                     } else {
                         System.err.println("Unexpected handshake message: " + msg);
                     }
                 }
 
-                // B) Game loop: Placement, Battle, GameOver
+                // === B) Game Phase: Placement, Turns, and Game Over ===
                 while ((msg = in.readObject()) != null) {
                     if (msg instanceof PlaceShipResponse psr) {
                         ((GameUI) ui).handlePlaceShipResponse(psr);
@@ -71,13 +87,13 @@ public class GameClient {
                         ((BattleUI) ui).handleFireResponse(fr);
                     } else if (msg instanceof GameOverMessage gom) {
                         ((BattleUI) ui).handleGameOverMessage(gom);
-                        break; // end of this game cycle
+                        break; // Game over, break out to check for rematch
                     } else {
                         System.err.println("Unexpected game loop message: " + msg);
                     }
                 }
 
-                // C) Detect new WELCOME for rematch
+                // === C) Rematch Cycle Detection ===
                 msg = in.readObject();
                 if (msg instanceof String str2 && "WELCOME".equals(str2)) {
                     System.out.println("Rematch starting...");
@@ -86,18 +102,24 @@ public class GameClient {
                     rematch = false;
                 }
 
-            } while (rematch);
+            } while (rematch);  // Loop for rematches
 
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
             try {
-                socket.close();
+                socket.close();  // Ensure socket is closed
             } catch (IOException ignored) {}
         }
     }
 
-    // --- Sending methods ---
+    // ====================
+    // === Send Methods ===
+    // ====================
+
+    /**
+     * Sends a ship placement request to the server.
+     */
     public void sendPlaceShip(Ship s) {
         try {
             out.writeObject(new PlaceShipRequest(myPlayer, s));
@@ -107,6 +129,9 @@ public class GameClient {
         }
     }
 
+    /**
+     * Sends a "ready to start battle" message to the server.
+     */
     public void sendReady() {
         try {
             out.writeObject(new ReadyRequest(myPlayer));
@@ -116,6 +141,9 @@ public class GameClient {
         }
     }
 
+    /**
+     * Sends a fire request (shot at a position) to the server.
+     */
     public void sendFire(Position p) {
         try {
             out.writeObject(new FireRequest(p));
@@ -125,6 +153,9 @@ public class GameClient {
         }
     }
 
+    /**
+     * Sends a rematch request to the server after the game ends.
+     */
     public void sendRematchRequest() {
         try {
             out.writeObject(new RematchRequest(myPlayer));

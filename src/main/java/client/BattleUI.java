@@ -15,12 +15,15 @@ import java.awt.event.*;
 import model.Ship;
 
 /**
- * Sadece savaş fazını yöneten estetik, koyu temalı UI (güncellendi gemi vurgusu ve rematch özelliği).
+ * UI class managing the battle phase for the player.
+ * Displays two boards: player's own and opponent's board.
+ * Handles turn logic, fire response, and rematch options.
  */
 public class BattleUI extends JFrame {
 
     private static final int G = GameRules.GRID_SIZE;
-    // Güncellenmiş renk paleti
+
+    // Custom color palette for the dark-themed UI
     private static final Color WATER       = Color.decode("#0D1B2A");
     private static final Color EMPTY_CELL  = Color.decode("#BDC3C7");
     private static final Color SHIP_COLOR  = Color.decode("#C0392B");
@@ -44,6 +47,7 @@ public class BattleUI extends JFrame {
         this.myPlayer = myPlayer;
         this.state = state;
 
+        // Set system look and feel (Nimbus preferred)
         try {
             for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
@@ -57,11 +61,13 @@ public class BattleUI extends JFrame {
         getContentPane().setBackground(WATER);
         setLayout(new BorderLayout(10, 10));
 
+        // Info label at the top
         infoLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
         infoLabel.setForeground(Color.WHITE);
         infoLabel.setHorizontalAlignment(SwingConstants.CENTER);
         add(infoLabel, BorderLayout.NORTH);
 
+        // Board panels for self and opponent
         myPanel  = new BoardPanel(myPlayer);
         oppPanel = new BoardPanel(1 - myPlayer);
         JPanel center = new JPanel(new GridLayout(1, 2, 20, 20));
@@ -70,7 +76,7 @@ public class BattleUI extends JFrame {
         center.add(oppPanel);
         add(center, BorderLayout.CENTER);
 
-        // Rematch button init
+        // Rematch button setup
         rematchButton.setFont(new Font("Segoe UI", Font.BOLD, 16));
         rematchButton.setVisible(false);
         rematchButton.setEnabled(false);
@@ -85,16 +91,23 @@ public class BattleUI extends JFrame {
         bottomPanel.add(rematchButton, BorderLayout.EAST);
         add(bottomPanel, BorderLayout.SOUTH);
 
-        pack(); setResizable(false); setLocationRelativeTo(null); setVisible(true);
+        pack();
+        setResizable(false);
+        setLocationRelativeTo(null);
+        setVisible(true);
 
         state.setCurrentPlayer(yourTurn ? myPlayer : 1 - myPlayer);
         refreshView();
     }
 
+    /**
+     * Refreshes the board UI after each turn.
+     */
     private void refreshView() {
         myPanel.revealShips(state.getBoard(myPlayer).getShips());
         myPanel.setButtonsEnabled(false);
 
+        // Update opponent board with known shots
         for (int r = 0; r < G; r++) for (int c = 0; c < G; c++) {
             Position p = new Position(r, c);
             Cell cell = state.getBoard(1 - myPlayer).getCell(p);
@@ -106,6 +119,9 @@ public class BattleUI extends JFrame {
         infoLabel.setText(yourTurn ? "YOUR TURN" : "OPPONENT'S TURN");
     }
 
+    /**
+     * Handles FireResponse message from server.
+     */
     public void handleFireResponse(FireResponse resp) {
         SwingUtilities.invokeLater(() -> {
             Position p = resp.getPosition();
@@ -117,6 +133,7 @@ public class BattleUI extends JFrame {
             if (iAttacked) oppPanel.markShot(p, result);
             else myPanel.markShot(p, result);
 
+            // Highlight sunken ships
             if (result == Cell.HIT) {
                 for (Ship ship : state.getBoard(defender).getShips()) {
                     boolean sunk = ship.getPositions().stream()
@@ -127,6 +144,9 @@ public class BattleUI extends JFrame {
         });
     }
 
+    /**
+     * Handles TurnMessage from server.
+     */
     public void handleTurnMessage(TurnMessage tm) {
         SwingUtilities.invokeLater(() -> {
             boolean yourTurn = tm.isYourTurn();
@@ -136,17 +156,22 @@ public class BattleUI extends JFrame {
         });
     }
 
+    /**
+     * Handles GameOverMessage and enables rematch button.
+     */
     public void handleGameOverMessage(GameOverMessage gom) {
         SwingUtilities.invokeLater(() -> {
             String msg = gom.getWinner() == myPlayer ? "YOU WIN!" : "YOU LOSE!";
             infoLabel.setText("GAME OVER – " + msg);
 
-            // Rematch butonunu aktif et
             rematchButton.setVisible(true);
             rematchButton.setEnabled(true);
         });
     }
 
+    /**
+     * Internal panel for representing a board.
+     */
     private class BoardPanel extends JPanel {
         private final JButton[][] buttons = new JButton[G][G];
         private final int player;
@@ -163,6 +188,9 @@ public class BattleUI extends JFrame {
             initButtons();
         }
 
+        /**
+         * Initializes grid buttons.
+         */
         private void initButtons() {
             for (int r = 0; r < G; r++) for (int c = 0; c < G; c++) {
                 JButton b = new JButton();
@@ -182,6 +210,9 @@ public class BattleUI extends JFrame {
             }
         }
 
+        /**
+         * Marks a cell as HIT or MISS.
+         */
         void markShot(Position p, Cell cell) {
             JButton b = buttons[p.getRow()][p.getCol()];
             if (cell == Cell.HIT) {
@@ -197,6 +228,9 @@ public class BattleUI extends JFrame {
             b.setEnabled(false);
         }
 
+        /**
+         * Marks a cell as part of a sunk ship.
+         */
         void markSunk(Position p) {
             JButton b = buttons[p.getRow()][p.getCol()];
             b.setBackground(SUNK_COLOR);
@@ -207,6 +241,9 @@ public class BattleUI extends JFrame {
             b.setEnabled(false);
         }
 
+        /**
+         * Shows player's ships on their own board.
+         */
         void revealShips(java.util.List<Ship> ships) {
             for (Ship ship : ships) for (Position p : ship.getPositions()) {
                 JButton b = buttons[p.getRow()][p.getCol()];
@@ -219,6 +256,9 @@ public class BattleUI extends JFrame {
             }
         }
 
+        /**
+         * Enables/disables grid buttons depending on turn.
+         */
         void setButtonsEnabled(boolean enabled) {
             for (int r = 0; r < G; r++) for (int c = 0; c < G; c++) {
                 JButton b = buttons[r][c];

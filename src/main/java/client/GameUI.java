@@ -10,30 +10,32 @@ import model.GameState;
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
-import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.StringSelection;
-import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.*;
 import java.awt.dnd.*;
 import java.awt.event.*;
 
 /**
- * Gemi yerleştirme + Ready ekranı. Estetik, koyu tema ve net renk paleti içerir (güncellendi).
+ * GameUI handles the ship placement phase and readiness confirmation.
+ * Dark theme, clear color palette, and drag-and-drop interface are used.
  */
 public class GameUI extends JFrame {
     private static final int G = GameRules.GRID_SIZE;
-    // Güncellenmiş renk paleti
-    private static final Color WATER        = Color.decode("#0D1B2A");  // Daha derin, kontrastlı su arka planı
-    private static final Color EMPTY_CELL   = Color.decode("#F8F9FA");  // Açık beyaz, hücre ayırt edilebilirliği artırır
-    private static final Color SHIP_COLOR   = Color.decode("#E74C3C");  // Canlı kırmızı gemiler için
-    private static final Color BORDER_COL   = Color.decode("#2C3E50");  // Keskin kontrastlı koyu mavi sınırlar
-    private static final Color HIGHLIGHT    = Color.decode("#F39C12");  // Parlak turuncu vurgular için
-    private static final Color READY_BTN_BG = Color.decode("#27AE60");  // Belirgin yeşil Ready butonu
-    private static final Color SIDEBAR_BG   = Color.decode("#34495E");  // Dengeleyici koyu gri arka plan
 
+    // --- Color palette for the dark-themed UI ---
+    private static final Color WATER        = Color.decode("#0D1B2A");
+    private static final Color EMPTY_CELL   = Color.decode("#F8F9FA");
+    private static final Color SHIP_COLOR   = Color.decode("#E74C3C");
+    private static final Color BORDER_COL   = Color.decode("#2C3E50");
+    private static final Color HIGHLIGHT    = Color.decode("#F39C12");
+    private static final Color READY_BTN_BG = Color.decode("#27AE60");
+    private static final Color SIDEBAR_BG   = Color.decode("#34495E");
+
+    // --- Client and state references ---
     private final GameClient client;
     private final int myPlayer;
     private final GameState state = new GameState();
 
+    // --- UI components and state variables ---
     private int shipIdx = 0;
     private boolean dragHoriz = true;
     private Position firstClick = null;
@@ -43,12 +45,15 @@ public class GameUI extends JFrame {
     private final JLabel infoLabel = new JLabel();
     private final JButton readyBtn = new JButton("Ready");
 
+    /**
+     * Constructs the GameUI for ship placement phase.
+     */
     public GameUI(GameClient client, int myPlayer) {
         super("Place Ships – Player " + (myPlayer + 1));
         this.client = client;
         this.myPlayer = myPlayer;
 
-        // Look & Feel
+        // Set Nimbus Look & Feel if available
         try {
             for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
@@ -58,19 +63,21 @@ public class GameUI extends JFrame {
             }
         } catch (Exception ignored) {}
 
+        // --- Frame setup ---
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         getContentPane().setBackground(WATER);
         setLayout(new BorderLayout(15, 15));
 
-        // Board Panel
+        // --- Main board area ---
         board = new BoardPanel();
         add(board, BorderLayout.CENTER);
 
-        // Sidebar
+        // --- Sidebar with ships and rotate button ---
         JPanel side = new JPanel();
         side.setBackground(SIDEBAR_BG);
         side.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
+
         JLabel shipsLabel = new JLabel("Ships");
         shipsLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         shipsLabel.setForeground(Color.WHITE);
@@ -78,6 +85,7 @@ public class GameUI extends JFrame {
         side.add(shipsLabel);
         side.add(Box.createVerticalStrut(10));
 
+        // Rotate Button
         JButton rot = new JButton("Rotate");
         rot.setFont(new Font("Segoe UI", Font.BOLD, 14));
         rot.setBackground(HIGHLIGHT);
@@ -88,6 +96,7 @@ public class GameUI extends JFrame {
         side.add(rot);
         side.add(Box.createVerticalStrut(15));
 
+        // Ship labels for drag-and-drop
         for (int len : sizes) {
             JLabel shipLabel = new JLabel(len + "-cell");
             shipLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
@@ -109,7 +118,7 @@ public class GameUI extends JFrame {
         }
         add(side, BorderLayout.EAST);
 
-        // Bottom Panel
+        // --- Bottom panel with instructions and Ready button ---
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 10));
         bottom.setBackground(WATER);
         infoLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
@@ -130,6 +139,7 @@ public class GameUI extends JFrame {
         bottom.add(readyBtn);
         add(bottom, BorderLayout.SOUTH);
 
+        // --- Final UI setup ---
         pack();
         setResizable(false);
         setLocationRelativeTo(null);
@@ -138,6 +148,9 @@ public class GameUI extends JFrame {
         updateView();
     }
 
+    /**
+     * Updates the board view and UI labels.
+     */
     private void updateView() {
         board.clear();
         board.revealShips(state.getBoard(myPlayer).getShips());
@@ -152,6 +165,9 @@ public class GameUI extends JFrame {
         }
     }
 
+    /**
+     * Handles server response for ship placement.
+     */
     public void handlePlaceShipResponse(PlaceShipResponse resp) {
         SwingUtilities.invokeLater(() -> {
             if (!resp.isSuccess()) {
@@ -162,6 +178,9 @@ public class GameUI extends JFrame {
         });
     }
 
+    /**
+     * Handles transition to battle phase.
+     */
     public void handleTurnMessage(TurnMessage tm) {
         SwingUtilities.invokeLater(() -> {
             BattleUI battle = new BattleUI(client, myPlayer, state, tm.isYourTurn());
@@ -170,7 +189,7 @@ public class GameUI extends JFrame {
         });
     }
 
-    // ==== İç panel sınıfı ====
+    // === Inner class for the game board panel ===
     private class BoardPanel extends JPanel {
         private final JButton[][] buttons = new JButton[G][G];
 
@@ -244,9 +263,11 @@ public class GameUI extends JFrame {
         }
     }
 
+    // === Handles two-click placement logic ===
     private class CellHandler implements ActionListener {
         private final Position pos;
         CellHandler(Position pos) { this.pos = pos; }
+
         public void actionPerformed(ActionEvent e) {
             if (shipIdx >= sizes.length) return;
             if (firstClick == null) {
@@ -265,10 +286,19 @@ public class GameUI extends JFrame {
         }
     }
 
+    // === Handles drag source for ship labels ===
     static class ValueExportTransferHandler extends TransferHandler {
         private final String val;
         ValueExportTransferHandler(int v) { val = String.valueOf(v); }
-        @Override protected Transferable createTransferable(JComponent c) { return new StringSelection(val); }
-        @Override public int getSourceActions(JComponent c) { return COPY; }
+
+        @Override
+        protected Transferable createTransferable(JComponent c) {
+            return new StringSelection(val);
+        }
+
+        @Override
+        public int getSourceActions(JComponent c) {
+            return COPY;
+        }
     }
 }
